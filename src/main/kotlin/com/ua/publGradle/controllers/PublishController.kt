@@ -20,6 +20,7 @@ class PublishController(
     @GetMapping("/publish")
     fun findById(@RequestParam publishId: Long): ResponseEntity<*> {
         val publishFound = publishService.findById(publishId)
+            ?: return ResponseEntity<Nothing>(HttpStatus.NOT_FOUND)
         return ResponseEntity(publishFound, HttpStatus.OK)
     }
 
