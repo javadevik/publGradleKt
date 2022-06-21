@@ -1,25 +1,27 @@
 package com.ua.publGradle.controllers
 
-import com.ua.publGradle.entities.PublishEntity
+import com.ua.publGradle.factory.MapFactory
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.http.ResponseEntity
+import org.springframework.test.web.reactive.server.WebTestClient
+import org.springframework.web.reactive.function.BodyInserters
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Testcontainers
-import java.time.Clock
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 @TestMethodOrder(OrderAnnotation::class)
 class PublishControllerTest(
     @Autowired
-    private val publishController: PublishController,
+    private val dataSourceContainer: PostgreSQLContainer<*>,
     @Autowired
-    private val clock: Clock,
+    private val webTestClient: WebTestClient,
     @Autowired
-    private val dataSourceContainer: PostgreSQLContainer<*>
+    @Qualifier("mapPublishFactory")
+    private val mapFactory: MapFactory
 ) {
 
     @Test
@@ -31,106 +33,116 @@ class PublishControllerTest(
 
     @Test
     @Order(2)
-    fun saveWithHttpStatus200Test() {
-        val response: ResponseEntity<PublishEntity>
-        val publish = PublishEntity(
-            1,
-            "title",
-            "desc",
-            "text",
-            2,
-            clock.millis()
-        )
-        response = publishController.save(publish)
-        Assertions.assertEquals(publish, response.body)
-    }
+    fun saveTest() {
+        val responseRec = webTestClient
+            .post()
+            .uri("/publishes")
+            .body(BodyInserters.fromValue(mapFactory.create()))
+            .exchange()
 
-    @Test
-    @Order(2)
-    fun saveWithHttpStatus403Test() {
-        val response: ResponseEntity<PublishEntity>
-        val publish = PublishEntity(
-            -1,
-            "title",
-            "desc",
-            "text",
-            2,
-            1655304000000
-        )
-        response = publishController.save(publish)
-        Assertions.assertNotEquals(publish, response.body)
+        responseRec.expectStatus().isCreated
+
     }
 
     @Test
     @Order(3)
     fun findByIdWithHttpStatus200Test() {
-        val response = publishController.findById(1)
-        Assertions.assertFalse(response.statusCode.isError)
-        Assertions.assertNotNull(response.body)
+        val responseRec = webTestClient
+            .get()
+            .uri { uriBuilder ->
+                uriBuilder.path("/publishes/publish")
+                    .queryParam("publishId", 1)
+                    .build()
+            }
+            .exchange()
+
+        responseRec.expectStatus().isOk
     }
 
     @Test
     @Order(4)
     fun findByIdWithHttpStatus404Test() {
-        val response = publishController.findById(-1)
-        Assertions.assertTrue(response.statusCode.isError)
-        Assertions.assertTrue(response.statusCode.is4xxClientError)
-        Assertions.assertNull(response.body)
+        val responseRec = webTestClient
+            .get()
+            .uri { uriBuilder ->
+                uriBuilder.path("/publishes/publish")
+                    .queryParam("publishId", -30)
+                    .build()
+            }
+            .exchange()
+
+        responseRec.expectStatus().is4xxClientError
     }
 
     @Test
     @Order(5)
     fun findAllPublishedTest() {
-        val response = publishController.findAllPublished()
-        val published = response.body
-        Assertions.assertFalse(published?.isEmpty()?:true)
+        val responseRec = webTestClient
+            .get()
+            .uri("/publishes/published")
+            .exchange()
+
+        responseRec.expectStatus().isOk
     }
 
     @Test
     @Order(6)
     fun findAllUnpublishedTest() {
-        val response = publishController.findAllUnpublished()
-        val published = response.body
-        Assertions.assertTrue(published?.isEmpty()?:false)
+        val responseRec = webTestClient
+            .get()
+            .uri("/publishes/unpublished")
+            .exchange()
+
+        responseRec.expectStatus().isOk
     }
 
     @Test
     @Order(7)
     fun updateTest200() {
-        val newPublish = PublishEntity(
-            1,
-            "Updated title",
-            "Updated desc",
-            "Updated text",
-            4,
-            1655304000000
-        )
-        val response = publishController.update(1, newPublish)
-        Assertions.assertFalse(response.statusCode.isError)
-        Assertions.assertEquals(newPublish, response.body)
+        val responseRec = webTestClient
+            .patch()
+            .uri { uriBuilder ->
+                uriBuilder
+                    .path("/publishes")
+                    .queryParam("publishId", 1)
+                    .build()
+            }
+            .body(BodyInserters.fromValue(mapFactory.createUpdated()))
+            .exchange()
+
+        responseRec.expectStatus().isOk
     }
 
     @Test
     @Order(8)
     fun updateTest403() {
-        val newPublish = PublishEntity(
-            1,
-            "Updated title",
-            "Updated desc",
-            "Updated text",
-            4,
-            1655304000000
-        )
-        val response = publishController.update(-1, newPublish)
-        Assertions.assertTrue(response.statusCode.isError)
-        Assertions.assertTrue(response.statusCode.is4xxClientError)
-        Assertions.assertNotEquals(newPublish, response.body)
+        val responseRec = webTestClient
+            .patch()
+            .uri { uriBuilder ->
+                uriBuilder
+                    .path("/publishes")
+                    .queryParam("publishId", -2)
+                    .build()
+            }
+            .body(BodyInserters.fromValue(mapFactory.createUpdated()))
+            .exchange()
+
+        responseRec.expectStatus().is4xxClientError
     }
 
     @Test
     @Order(9)
     fun deleteTest() {
-        val response = publishController.delete(1)
-        Assertions.assertFalse(response.statusCode.isError)
+        val responseRec = webTestClient
+            .delete()
+            .uri { uriBuilder ->
+                uriBuilder
+                    .path("/publishes")
+                    .queryParam("publishId", 1)
+                    .build()
+            }
+            .exchange()
+
+        responseRec.expectStatus().isOk
     }
 }
