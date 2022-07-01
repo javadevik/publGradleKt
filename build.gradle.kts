@@ -49,3 +49,7 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
+tasks.bootJar {
+    archiveBaseName.set("app")
+    archiveVersion.set("")
+}
